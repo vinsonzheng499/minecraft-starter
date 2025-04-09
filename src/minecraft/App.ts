@@ -1,5 +1,3 @@
-// FILE: App.ts (Corrected Constructor)
-
 import { Debugger } from "../lib/webglutils/Debugging.js";
 import {
   CanvasAnimation,
@@ -24,8 +22,8 @@ export class MinecraftAnimation extends CanvasAnimation {
   private loadedChunks: Map<string, Chunk>; // Key: "x,z"
   private currentChunkX: number;
   private currentChunkZ: number;
-  private readonly chunkSize: number = 64; // *** Defined here ***
-  private readonly renderDistance: number = 1; // *** Defined here *** Render 3x3 (1+1+1) chunks around player
+  private readonly chunkSize: number = 64;
+  private readonly renderDistance: number = 1; // Render 3x3 (1+1+1) chunks around player
 
   /*  Cube Rendering */
   private cubeGeometry: Cube;
@@ -43,11 +41,11 @@ export class MinecraftAnimation extends CanvasAnimation {
   private playerPosition: Vec3;
   private playerVelocity: Vec3;
   private isJumping: boolean;
-  private readonly gravity: number = -25.0; // *** Defined here *** Units per second squared
-  private readonly jumpSpeed: number = 10.0; // *** Defined here *** Units per second
-  private readonly playerHeight: number = 2.0; // *** Defined here ***
-  private readonly playerRadius: number = 0.4; // *** Defined here ***
-  private readonly terminalVelocity: number = -50.0; // *** Defined here *** Max falling speed
+  private readonly gravity: number = -25.0; // Units per second squared
+  private readonly jumpSpeed: number = 10.0; // Units per second
+  private readonly playerHeight: number = 2.0;
+  private readonly playerRadius: number = 0.4;
+  private readonly terminalVelocity: number = -50.0; // Max falling speed
   
   private lastFrameTime: number;
 

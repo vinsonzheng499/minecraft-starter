@@ -1,143 +1,135 @@
 import { Mat3, Mat4, Vec3, Vec4 } from "../lib/TSM.js";
-import { Noise } from "./Noise.js";
+import { Noise } from "./Noise.js"; // Import the MODIFIED Noise class
 
 export class Chunk {
-    private cubes: number; // Number of cubes that should be *drawn* each frame
-    private cubePositionsF32: Float32Array; // (4 x cubes) array of cube translations, in homogeneous coordinates
-    private chunkX: number; // Chunk coordinate X (integer)
-    private chunkZ: number; // Chunk coordinate Z (integer)
-    private size: number; // Number of cubes along each side of the chunk
-    private noise: Noise;
-    private seed: string;
+    private cubes: number;
+    private cubePositionsF32: Float32Array;
+    private chunkX: number;
+    private chunkZ: number;
+    private size: number;
+    // REMOVE: private noise: Noise;
+    // REMOVE: private seed: string;
 
-    // Store heightmap for efficient block checking
-    private heightMap: number[][]; 
-    // Store min/max world coords for convenience
+    private heightMap: number[][];
     private minWorldX: number;
     private minWorldZ: number;
     private maxWorldX: number;
     private maxWorldZ: number;
 
-
-    // Use chunk coordinates (integers) for constructor
     constructor(chunkX: number, chunkZ: number, size: number) {
         this.chunkX = chunkX;
         this.chunkZ = chunkZ;
         this.size = size;
-        
-        // Calculate world coordinates of the chunk boundaries
+
         this.minWorldX = this.chunkX * this.size;
         this.minWorldZ = this.chunkZ * this.size;
         this.maxWorldX = this.minWorldX + this.size;
         this.maxWorldZ = this.minWorldZ + this.size;
-        
-        // Create a unique, deterministic seed for this chunk based on its coordinates
-        this.seed = `${this.chunkX},${this.chunkZ}`; 
-        this.noise = new Noise(this.seed); // Initialize noise generator with chunk-specific seed
-        
+
+        // REMOVE: this.seed = `${this.chunkX},${this.chunkZ}`;
+        // REMOVE: this.noise = new Noise(this.seed);
+
         this.heightMap = Array.from({ length: size }, () => Array(size).fill(0));
-        this.cubes = 0; // Will be calculated
-        this.cubePositionsF32 = new Float32Array(0); // Will be allocated
+        this.cubes = 0;
+        this.cubePositionsF32 = new Float32Array(0);
 
         this.generateCubes();
     }
-    
-    
-    private generateCubes() {
-        const baseHeight = 10; // Minimum ground level
-        const terrainAmplitude = 80; // Max height variation above base
-        const noiseScale = 0.02; // Controls the "zoom" level of the noise. Smaller values -> larger features.
-        const octaves = 4; // Number of noise layers
-        const persistence = 0.5; // How much each octave contributes (amplitude multiplier)
-        const frequency = 1.0; // Base frequency for the first octave
 
-        // Pass 1: Calculate height map and total number of cubes
+
+    private generateCubes() {
+        const baseHeight = 10;
+        const terrainAmplitude = 80;
+        const noiseScale = 0.02;
+        const octaves = 4;
+        const persistence = 0.5;
+        const frequency = 1.0; // Base frequency for octaveNoise
+
         let totalCubes = 0;
-        for (let i = 0; i < this.size; i++) { // Local Z
-            for (let j = 0; j < this.size; j++) { // Local X
+        // Calculate heightmap first
+        for (let i = 0; i < this.size; i++) { // Local Z -> World Z
+            for (let j = 0; j < this.size; j++) { // Local X -> World X
                 const worldX = this.minWorldX + j;
                 const worldZ = this.minWorldZ + i;
 
-                // Get multi-octave noise value [0, 1]
-                const noiseVal = this.noise.octaveNoise(
-                    worldX * noiseScale, 
-                    worldZ * noiseScale, 
-                    octaves, 
-                    persistence, 
-                    frequency
+                // *** CALL STATIC Noise method ***
+                const noiseVal = Noise.octaveNoise(
+                    worldX * noiseScale,
+                    worldZ * noiseScale,
+                    octaves,
+                    persistence,
+                    frequency // Pass base frequency here
                 );
 
-                // Map noise value to height range [baseHeight, baseHeight + terrainAmplitude]
                 const height = Math.floor(baseHeight + noiseVal * terrainAmplitude);
-                
-                // Clamp height just in case (though noise should be in [0,1])
-                const clampedHeight = Math.max(0, Math.min(100, height)); // Ensure height stays within reasonable bounds [0, 100]
-
+                const clampedHeight = Math.max(0, Math.min(100, height));
                 this.heightMap[i][j] = clampedHeight;
-                
-                // Cubes are stacked from y=0 up to and including 'clampedHeight'
-                totalCubes += (clampedHeight + 1); 
+
+                const minYDraw = 0;
+                totalCubes += Math.max(0, clampedHeight - minYDraw + 1);
             }
         }
 
-        // Allocate the buffer
+        // Allocate and fill buffer (same as before)
         this.cubes = totalCubes;
-        this.cubePositionsF32 = new Float32Array(4 * this.cubes);
-
-        // Pass 2: Fill the cube positions buffer
+        this.cubePositionsF32 = new Float32Array(Math.max(0, 4 * this.cubes));
         let bufferIndex = 0;
-        for (let i = 0; i < this.size; i++) { // Local Z
-            for (let j = 0; j < this.size; j++) { // Local X
+        const minYDraw = 0;
+        for (let i = 0; i < this.size; i++) {
+            for (let j = 0; j < this.size; j++) {
                 const height = this.heightMap[i][j];
-                const worldX = this.minWorldX + j; // Center of the cube column horizontally
-                const worldZ = this.minWorldZ + i; // Center of the cube column horizontally
-
-                for (let y = 0; y <= height; y++) {
-                    this.cubePositionsF32[bufferIndex++] = worldX; // Cube center X
-                    this.cubePositionsF32[bufferIndex++] = y;      // Cube center Y
-                    this.cubePositionsF32[bufferIndex++] = worldZ; // Cube center Z
-                    this.cubePositionsF32[bufferIndex++] = 0;      // W component (padding for vec4 attribute)
+                const worldX = this.minWorldX + j;
+                const worldZ = this.minWorldZ + i;
+                for (let y = minYDraw; y <= height; y++) {
+                     if (bufferIndex + 3 < this.cubePositionsF32.length) {
+                        this.cubePositionsF32[bufferIndex++] = worldX;
+                        this.cubePositionsF32[bufferIndex++] = y;
+                        this.cubePositionsF32[bufferIndex++] = worldZ;
+                        this.cubePositionsF32[bufferIndex++] = 0;
+                     } else {
+                        console.error(`Buffer overflow during chunk gen! Chunk ${this.chunkX},${this.chunkZ}`);
+                        i = this.size; j = this.size; break; // Stop filling
+                     }
                 }
             }
         }
-         // Verify buffer fill correctness (optional debug check)
-        // if (bufferIndex !== this.cubePositionsF32.length) {
-        //     console.error(`Buffer fill mismatch in chunk ${this.seed}. Expected ${this.cubePositionsF32.length}, got ${bufferIndex}`);
-        // }
+         this.cubes = Math.floor(bufferIndex / 4); // Update count in case of overflow
+
     }
-    
+
+    // getHeight, hasBlock, cubePositions, numCubes remain the same
+
     /**
-     * Checks if a block exists at the given world integer coordinates.
-     * Assumes worldX, worldY, worldZ are already floored integers.
+     * Gets the Y coordinate of the highest solid block at the given
+     * world integer coordinates (X, Z). Returns -1 if outside chunk bounds or no block.
      */
+    public getHeight(worldX: number, worldZ: number): number {
+        const ix = Math.floor(worldX);
+        const iz = Math.floor(worldZ);
+
+        if (ix < this.minWorldX || ix >= this.maxWorldX ||
+            iz < this.minWorldZ || iz >= this.maxWorldZ) {
+            return -1;
+        }
+        const localX = ix - this.minWorldX;
+        const localZ = iz - this.minWorldZ;
+
+         if (localZ < 0 || localZ >= this.size || localX < 0 || localX >= this.size) {
+            // This should not happen if the first check passed, but safety first
+            return -1;
+        }
+        return this.heightMap[localZ][localX];
+    }
+
     public hasBlock(worldX: number, worldY: number, worldZ: number): boolean {
-        // Check if coordinate is within this chunk's horizontal bounds
-        if (worldX < this.minWorldX || worldX >= this.maxWorldX || 
-            worldZ < this.minWorldZ || worldZ >= this.maxWorldZ) {
-            return false; // Coordinate is not in this chunk
-        }
-        
-        // Convert world coordinates to local chunk indices
-        const localX = worldX - this.minWorldX;
-        const localZ = worldZ - this.minWorldZ;
-
-        // Check bounds again (should be redundant but safe)
-         if (localX < 0 || localX >= this.size || localZ < 0 || localZ >= this.size) {
-            console.warn("Local coordinate out of bounds in hasBlock check - should not happen");
-            return false; 
-        }
-
-        // Get the height of the terrain column at this local position
-        const terrainHeight = this.heightMap[localZ][localX]; // Note: heightMap is [z][x]
-
-        // A block exists if the query Y is non-negative and less than or equal to the terrain height
+        const terrainHeight = this.getHeight(worldX, worldZ);
         return worldY >= 0 && worldY <= terrainHeight;
     }
 
     public cubePositions(): Float32Array {
-        return this.cubePositionsF32;
+        return this.cubePositionsF32.slice(0, this.cubes * 4);
     }
-        
+
     public numCubes(): number {
         return this.cubes;
     }
